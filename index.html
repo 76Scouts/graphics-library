@@ -99,6 +99,7 @@
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     <input id="q" type="search" placeholder="Αναζήτηση σε όλη τη βιβλιοθήκη…">
   </div>
+  <button class="btn ghost" id="backBtn" title="Πίσω (ένα επίπεδο πάνω)" disabled>← Πίσω</button>
   <button class="btn ghost" id="reload">↻ Ανανέωση</button>
   <button class="btn y" id="groupBtn" title="Ομαδοποίηση αρχείων ίδιου λογοτύπου σε ένα entry">🗂 Κατά λογότυπο</button>
   <button class="btn ghost" id="modBtn" title="Έγκριση ανεβασμάτων (μόνο διαχειριστής)">✅ Έγκριση</button>
@@ -156,7 +157,7 @@ function boot(){
   setStatus("σύνδεση…");
   listFolder(null).then(function(root){
     if(!root||root.error||!root.id) throw new Error(root&&root.error||"no root");
-    path=[{id:root.id,name:root.name}]; setStatus("συνδεδεμένο ✓","ok");
+    path=[{id:root.id,name:root.name}]; try{history.replaceState({depth:1},"");}catch(e){} setStatus("συνδεδεμένο ✓","ok");
     apiGet("action=labels").then(function(r){ LABELS=(r&&r.labels)||{}; buildTagBar(); render(); }).catch(function(){ render(); });
   }).catch(function(err){ setStatus("εκτός σύνδεσης","err");
     showEmpty("Δεν φόρτωσε ("+esc(String(err.message||err))+"). Αν είσαι σε browser με πολλά Google logins, δοκίμασε incognito ή κινητό."); });
@@ -190,7 +191,9 @@ function crumbs(){
     var node=(i===path.length-1)?('<span class="cur">'+esc(label)+'</span>'):('<a data-i="'+i+'">'+esc(label)+'</a>');
     return node+(i<path.length-1?'<span class="sep">›</span>':'');
   }).join("");
+  var bb=el("backBtn"); if(bb) bb.disabled = (path.length<=1);
 }
+function pushDepth(){ try{ history.pushState({depth:path.length},""); }catch(e){} }
 function showEmpty(msg){ el("grid").innerHTML=""; el("grid").style.display="none"; var e=el("empty"); e.style.display="block"; e.textContent=msg; }
 function showLoading(){ el("empty").style.display="none"; el("grid").style.display="grid"; el("grid").innerHTML=""; el("count").textContent="φόρτωση…"; }
 
@@ -273,12 +276,12 @@ function lazyThumbs(){
 
 /* ---------- navigation ---------- */
 function goFolder(id,name){
-  activeTag=""; path.push({id:id,name:name});
+  activeTag=""; path.push({id:id,name:name}); pushDepth();
   if(cache[id]){ render(); buildTagBar(); window.scrollTo(0,0); }
   else { showLoading(); listFolder(id).then(function(res){ if(res&&res.error) throw new Error(res.error); render(); buildTagBar(); window.scrollTo(0,0); })
     .catch(function(err){ path.pop(); toast("Σφάλμα φακέλου: "+esc(String(err.message||err)),true); render(); }); }
 }
-function goCrumb(i){ if(i<0)i=0; path=path.slice(0,i+1); activeTag=""; if(el("q").value) el("q").value=""; render(); buildTagBar(); }
+function goCrumb(i){ if(i<0)i=0; path=path.slice(0,i+1); activeTag=""; if(el("q").value) el("q").value=""; render(); buildTagBar(); pushDepth(); }
 function reload(){
   var id=cur().id; delete cache[id]; TREE=null; showLoading();
   Promise.all([listFolder(id),apiGet("action=labels").then(function(r){LABELS=(r&&r.labels)||LABELS;}).catch(function(){})])
@@ -460,6 +463,8 @@ function wire(){
   el("tagbar").addEventListener("click",function(e){ var c=e.target.closest("[data-tag]"); if(!c)return; activeTag=c.getAttribute("data-tag"); buildTagBar(); if(el("q").value.trim()) doSearch(el("q").value); else render(); });
   el("crumbs").addEventListener("click",function(e){ var a=e.target.closest("a[data-i]"); if(a) goCrumb(parseInt(a.getAttribute("data-i"),10)); });
   el("q").addEventListener("input",function(){ doSearch(this.value); });
+  el("backBtn").addEventListener("click",function(){ if(path.length>1) history.back(); });
+  window.addEventListener("popstate",function(e){ var d=(e.state&&e.state.depth)||1; if(d<path.length){ path=path.slice(0,d); activeTag=""; if(el("q").value) el("q").value=""; render(); buildTagBar(); } });
   el("reload").addEventListener("click",reload);
   el("groupBtn").addEventListener("click",function(){ groupView=!groupView; this.classList.toggle("y",groupView); this.textContent=groupView?"🗂 Κατά λογότυπο":"📄 Κατά αρχείο"; if(el("q").value.trim()) doSearch(el("q").value); else render(); });
   el("modBtn").addEventListener("click",openModeration);
@@ -481,17 +486,6 @@ function wire(){
 }
 
 wire(); boot();
-</script>
-<script>
-/* Καθαρίζει το _gl (linker του Google Analytics) από τη διεύθυνση, ώστε ο
-   σύνδεσμος που αντιγράφει κανείς να μην κουβαλά αναγνωριστικό συσκευής.
-   Δεν αγγίζει καμία άλλη παράμετρο — το ?a= και το ?team= μένουν ακέραια. */
-(function(){try{
-  var u=new URL(location.href),n=0;
-  ["_gl","_ga"].forEach(function(k){ if(u.searchParams.has(k)){u.searchParams.delete(k);n++;} });
-  if(n){ var q=u.searchParams.toString();
-    history.replaceState(null,"",u.pathname+(q?"?"+q:"")+u.hash); }
-}catch(e){}})();
 </script>
 </body>
 </html>
