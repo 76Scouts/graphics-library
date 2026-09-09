@@ -63,6 +63,17 @@
   .fmt:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
   .fmt.ai{color:#b3541e}.fmt.psd{color:#1b4fa0}.fmt.pdf{color:#b02525}.fmt.svg{color:#1f8a4c}
   .fmtcount{font-size:10px;font-weight:800;background:var(--yellow);color:#3a2f00;border-radius:999px;padding:2px 7px;position:absolute;top:6px;left:6px}
+  .card.sel{outline:3px solid var(--blue);outline-offset:-1px}
+  .card.sel .thumb::after{content:"✓";position:absolute;top:6px;right:6px;background:var(--blue);color:#fff;font-weight:900;font-size:13px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .mergebar{position:fixed;left:0;right:0;bottom:0;z-index:55;background:#fff;border-top:2px solid var(--blue);box-shadow:0 -6px 24px rgba(20,40,70,.16);padding:10px 16px;display:none;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
+  .mergebar .mb-head{font-size:14px;font-weight:800}
+  .mergebar .mb-list{display:flex;gap:6px;flex-wrap:wrap}
+  .mbchip{font-size:11.5px;font-weight:700;background:#eef3f9;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:3px 9px}
+  .mergebar .mb-form{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+  .mergebar .mb-form input{flex:0 0 260px;max-width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px}
+  .mergebar .mb-prev{font-size:11.5px;color:var(--muted);flex:1;min-width:180px;line-height:1.5}
+  .mergebar .mb-prev b{color:var(--ink)}
+  .mergebar .mb-actions{display:flex;gap:8px}
   .empty{text-align:center;color:var(--muted);padding:46px 10px;font-size:14px}
   .up{background:#fff;border:1px dashed #cbd7e4;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:12.5px;color:var(--muted);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
   .up b{color:var(--ink)}
@@ -103,6 +114,7 @@
   <button class="btn ghost" id="reload">↻ Ανανέωση</button>
   <button class="btn y" id="groupBtn" title="Ομαδοποίηση αρχείων ίδιου λογοτύπου σε ένα entry">🗂 Κατά λογότυπο</button>
   <button class="btn ghost" id="modBtn" title="Έγκριση ανεβασμάτων (μόνο διαχειριστής)">✅ Έγκριση</button>
+  <button class="btn ghost" id="mergeBtn" title="Ένωσε αρχεία ίδιου λογοτύπου (μόνο διαχειριστής)">🔗 Ένωση</button>
   <button class="btn ghost" id="zipBtn">⬇︎ Φάκελος (.zip)</button>
   <button class="btn y" id="uploadBtn">⬆︎ Αρχεία</button>
   <button class="btn y" id="folderBtn">⬆︎ Φάκελος</button>
@@ -123,6 +135,15 @@
 </main>
 
 <div class="backdrop" id="backdrop"><div class="modal" id="modal"></div></div>
+<div class="mergebar" id="mergebar">
+  <div class="mb-head">🔗 Ένωση <b id="mbCount">0</b> αρχείων σε ένα γραφικό — <span style="font-weight:400;color:var(--muted)">διάλεξε τα ίδια σχέδια, δώσε κοινό όνομα</span></div>
+  <div class="mb-list" id="mbList"></div>
+  <div class="mb-form">
+    <input id="mbName" type="text" placeholder="κοινό όνομα (π.χ. 76 Σήμα Ομάδας)">
+    <div class="mb-prev" id="mbPrev"></div>
+  </div>
+  <div class="mb-actions"><button class="btn" id="mbGo" disabled>🔗 Ένωσε</button><button class="btn ghost" id="mbCancel">Άκυρο</button></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -205,7 +226,7 @@ function folderCard(f){
 }
 function fileCard(fl,subtitle){
   var meta=subtitle?('<span>'+esc(subtitle)+'</span>'):('<span>'+(fl.size?human(fl.size):'')+'</span>');
-  return '<div class="card" data-file="'+esc(fl.id)+'" data-name="'+esc(fl.name)+'" data-ext="'+esc(fl.ext)+'">'+
+  return '<div class="card'+(selFiles[fl.id]?" sel":"")+'" data-file="'+esc(fl.id)+'" data-name="'+esc(fl.name)+'" data-ext="'+esc(fl.ext)+'">'+
     '<div class="thumb'+(isTransName(fl.name)?" trans":"")+'" data-thumbfor="'+esc(fl.id)+'">'+
       '<div class="exttile"><span class="e">'+esc((fl.ext||"?").toUpperCase())+'</span></div></div>'+
     '<div class="cbody"><div class="cname">'+esc(fl.name)+'</div>'+tagChipsHTML(fl.id)+
@@ -252,19 +273,71 @@ function entryCard(en){
             :('<button class="dl" data-dl="'+esc(p.id)+'" data-dln="'+esc(p.name)+'">Λήψη</button>'))+
       '</div></div></div>';
 }
+/* ---------- merge tool (admin): select files → κοινό όνομα → ένα entry ---------- */
+var mergeMode=false, selFiles={};
 function render(){
   var L=curListing(); if(!L){ showEmpty("…"); return; }
   crumbs();
   var folders=L.folders.filter(function(f){return hasTag(f.id);});
   var files=L.files.filter(function(f){return hasTag(f.id);});
-  var entries = groupView ? groupEntries(files) : null;
-  var filesHtml = groupView ? entries.map(entryCard).join("") : files.map(function(f){return fileCard(f,"");}).join("");
+  var flat = mergeMode || !groupView;
+  var entries = flat ? null : groupEntries(files);
+  var filesHtml = flat ? files.map(function(f){return fileCard(f,"");}).join("") : entries.map(entryCard).join("");
   var html=folders.map(folderCard).join("")+filesHtml;
   if(!html){ showEmpty(activeTag?("Κανένα με ετικέτα «"+activeTag+"» εδώ."):"Άδειος φάκελος. Πάτα «Αρχεία»/«Φάκελος» για να προσθέσεις."); el("count").textContent="0 στοιχεία"; return; }
   el("empty").style.display="none"; el("grid").style.display="grid"; el("grid").innerHTML=html;
-  var unit = groupView ? (entries.length+" λογότυπα ("+files.length+" αρχεία)") : (files.length+" αρχεία");
-  el("count").textContent=folders.length+" φάκελοι · "+unit+(activeTag?(" · ετικέτα «"+activeTag+"»"):"");
+  var unit = flat ? (files.length+" αρχεία") : (entries.length+" λογότυπα ("+files.length+" αρχεία)");
+  el("count").textContent=folders.length+" φάκελοι · "+unit+(mergeMode?" · 🔗 λειτουργία ένωσης":(activeTag?(" · ετικέτα «"+activeTag+"»"):""));
   lazyThumbs();
+}
+function entryTitleForMerge(name){ return entryTitle(name); }
+function suggestBase(names){
+  // shortest name's clean base
+  var s=names.slice().sort(function(a,b){return a.length-b.length;})[0]||"";
+  return entryTitle(s);
+}
+function updateMergeBar(){
+  var bar=el("mergebar"); if(!mergeMode){ bar.style.display="none"; return; }
+  bar.style.display="flex";
+  var ids=Object.keys(selFiles);
+  el("mbCount").textContent=ids.length;
+  el("mbList").innerHTML=ids.map(function(id){return '<span class="mbchip">'+esc(selFiles[id].name)+'</span>';}).join("") || '<span class="mbchip" style="opacity:.6">τίποτα επιλεγμένο</span>';
+  var inp=el("mbName");
+  if(!inp.value.trim() && ids.length) inp.value=suggestBase(ids.map(function(id){return selFiles[id].name;}));
+  var base=inp.value.trim();
+  el("mbPrev").innerHTML = base ? ids.map(function(id){return esc(selFiles[id].name)+' → <b>'+esc(base+'.'+selFiles[id].ext)+'</b>';}).join('<br>') : 'Γράψε ένα κοινό όνομα…';
+  el("mbGo").disabled = (ids.length<2 || !base);
+}
+function toggleSel(id,name,ext,card){
+  if(selFiles[id]){ delete selFiles[id]; if(card) card.classList.remove("sel"); }
+  else { selFiles[id]={name:name,ext:ext}; if(card) card.classList.add("sel"); }
+  updateMergeBar();
+}
+function enterMerge(){
+  var k=adminKey(false); if(!k) return;
+  mergeMode=true; selFiles={}; el("mbName").value="";
+  el("mergeBtn").classList.add("y");
+  render(); updateMergeBar();
+  toast("Λειτουργία ένωσης: διάλεξε 2+ αρχεία που είναι το ΙΔΙΟ σχέδιο.");
+}
+function exitMerge(){
+  mergeMode=false; selFiles={}; el("mergeBtn").classList.remove("y");
+  el("mergebar").style.display="none"; el("mbName").value="";
+  render();
+}
+function doMerge(){
+  var base=el("mbName").value.trim(); if(!base) return;
+  var key=localStorage.getItem("gx_admin")||"";
+  var ids=Object.keys(selFiles); if(ids.length<2) return;
+  el("mbGo").disabled=true; toast("Ένωση "+ids.length+" αρχείων…");
+  Promise.all(ids.map(function(id){ return apiPost({action:"rename",id:id,name:base+"."+selFiles[id].ext,key:key}).catch(function(){return {error:"net"};}); }))
+    .then(function(res){
+      var bad=res.filter(function(r){return !r||r.error;});
+      if(bad.length && bad[0].error==="bad key"){ localStorage.removeItem("gx_admin"); toast("Λάθος κωδικός.",true); el("mbGo").disabled=false; return; }
+      if(bad.length){ toast(bad.length+" απέτυχαν.",true); }
+      else { toast("Ενώθηκαν σε «"+esc(base)+"». ✓"); }
+      exitMerge(); reload();
+    });
 }
 function lazyThumbs(){
   Array.prototype.forEach.call(document.querySelectorAll("[data-thumbfor]"),function(box){
@@ -453,6 +526,11 @@ function modAct(obj,label){
 /* ---------- events ---------- */
 function wire(){
   el("grid").addEventListener("click",function(e){
+    if(mergeMode){
+      var mf=e.target.closest("[data-folder]"); if(mf){ goFolder(mf.getAttribute("data-folder"),mf.getAttribute("data-fname")); return; }
+      var mfi=e.target.closest("[data-file]"); if(mfi){ e.stopPropagation(); toggleSel(mfi.getAttribute("data-file"),mfi.getAttribute("data-name"),mfi.getAttribute("data-ext"),mfi); return; }
+      return;
+    }
     var te=e.target.closest("[data-tag-edit]"); if(te){ e.stopPropagation(); editTags(te.getAttribute("data-tag-edit"),te.getAttribute("data-tag-name")); return; }
     var z=e.target.closest("[data-zip]"); if(z){ e.stopPropagation(); downloadZip(z.getAttribute("data-zip"),z.getAttribute("data-zipn")); return; }
     var za=e.target.closest("[data-zipids]"); if(za){ e.stopPropagation(); downloadAllFormats(za.getAttribute("data-zipids"),za.getAttribute("data-zipn")); return; }
@@ -468,6 +546,10 @@ function wire(){
   el("reload").addEventListener("click",reload);
   el("groupBtn").addEventListener("click",function(){ groupView=!groupView; this.classList.toggle("y",groupView); this.textContent=groupView?"🗂 Κατά λογότυπο":"📄 Κατά αρχείο"; if(el("q").value.trim()) doSearch(el("q").value); else render(); });
   el("modBtn").addEventListener("click",openModeration);
+  el("mergeBtn").addEventListener("click",function(){ if(mergeMode) exitMerge(); else enterMerge(); });
+  el("mbCancel").addEventListener("click",exitMerge);
+  el("mbGo").addEventListener("click",doMerge);
+  el("mbName").addEventListener("input",updateMergeBar);
   el("modal").addEventListener("click",function(e){
     var ap=e.target.closest("[data-approve]"); if(ap){ modAct({action:"approve",id:ap.getAttribute("data-approve")},"Έγκριση"); return; }
     var ah=e.target.closest("[data-approvehere]"); if(ah){ modAct({action:"approve",id:ah.getAttribute("data-approvehere"),toFolderId:cur().id},"Έγκριση εδώ"); return; }
