@@ -482,5 +482,16 @@ function wire(){
 
 wire(); boot();
 </script>
+<script>
+/* Καθαρίζει το _gl (linker του Google Analytics) από τη διεύθυνση, ώστε ο
+   σύνδεσμος που αντιγράφει κανείς να μην κουβαλά αναγνωριστικό συσκευής.
+   Δεν αγγίζει καμία άλλη παράμετρο — το ?a= και το ?team= μένουν ακέραια. */
+(function(){try{
+  var u=new URL(location.href),n=0;
+  ["_gl","_ga"].forEach(function(k){ if(u.searchParams.has(k)){u.searchParams.delete(k);n++;} });
+  if(n){ var q=u.searchParams.toString();
+    history.replaceState(null,"",u.pathname+(q?"?"+q:"")+u.hash); }
+}catch(e){}})();
+</script>
 </body>
 </html>
