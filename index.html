@@ -90,7 +90,34 @@
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(10px);background:var(--ink);color:#fff;padding:11px 17px;border-radius:11px;font-size:13.5px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:60;max-width:90vw;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .toast.err{background:var(--out)}
-  @media(max-width:560px){.grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}}
+  .card.pick{outline:3px solid var(--ok);outline-offset:-1px}
+  .card.pick .thumb::after{content:"✓";position:absolute;top:6px;right:6px;background:var(--ok);color:#fff;font-weight:900;font-size:13px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+  .csub{font-size:10.5px;color:var(--muted);line-height:1.3;word-break:break-word}
+  .catbar{max-width:1200px;margin:0 auto;padding:8px 18px 0;display:none;gap:6px;flex-wrap:wrap;align-items:center}
+  .catbar .lbl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 2px 0 6px}
+  .dlbar{position:fixed;left:0;right:0;bottom:0;z-index:54;background:#fff;border-top:2px solid var(--ok);box-shadow:0 -6px 24px rgba(20,40,70,.16);padding:10px 16px;display:none;gap:10px;align-items:center;flex-wrap:wrap}
+  .dlbar b{font-size:15px}
+  .mb-sug{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+  .sugbtn{border:1px dashed var(--blue);background:#f4f8fd;color:var(--blue);font-weight:700;font-size:11.5px;padding:4px 9px;border-radius:999px;cursor:pointer}
+  .sugbtn:hover{background:var(--blue);color:#fff}
+  .who{font-weight:800;color:var(--blue);cursor:pointer;text-decoration:underline dotted}
+  @media(max-width:700px){
+    header .wrap{padding:10px 12px;gap:10px}
+    header h1{font-size:15px} header .sub{display:none}
+    .badge76{width:38px;height:38px}.badge76 img{width:32px;height:32px}
+    .status{font-size:11px;padding:5px 9px}
+    .toolbar{padding:10px 12px 2px;gap:6px}
+    .search{flex:1 1 100%;min-width:0}
+    .btn{font-size:12px;padding:9px 10px;flex:1 1 auto}
+    .tagbar,.crumbs,.catbar{padding-left:12px;padding-right:12px}
+    main{padding:8px 12px 110px}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+    .fmt{font-size:11px;padding:5px 9px}
+    .dl{padding:7px 10px}
+    .up{font-size:12px;padding:10px 12px}
+    .mergebar .mb-form input{flex:1 1 100%}
+    .dlbar .btn{flex:1 1 40%}
+  }
 </style>
 </head>
 <body>
@@ -113,6 +140,8 @@
   <button class="btn ghost" id="backBtn" title="Πίσω (ένα επίπεδο πάνω)" disabled>← Πίσω</button>
   <button class="btn ghost" id="reload">↻ Ανανέωση</button>
   <button class="btn y" id="groupBtn" title="Ομαδοποίηση αρχείων ίδιου λογοτύπου σε ένα entry">🗂 Κατά λογότυπο</button>
+  <button class="btn ghost" id="catBtn" title="Όλα τα λογότυπα της βιβλιοθήκης σε μία σελίδα">📚 Κατάλογος</button>
+  <button class="btn ghost" id="pickBtn" title="Διάλεξε πολλά γραφικά και κατέβασέ τα σε ένα zip">☑ Επιλογή</button>
   <button class="btn ghost" id="modBtn" title="Έγκριση ανεβασμάτων (μόνο διαχειριστής)">✅ Έγκριση</button>
   <button class="btn ghost" id="mergeBtn" title="Ένωσε αρχεία ίδιου λογοτύπου (μόνο διαχειριστής)">🔗 Ένωση</button>
   <button class="btn ghost" id="zipBtn">⬇︎ Φάκελος (.zip)</button>
@@ -124,10 +153,11 @@
 
 <div class="tagbar" id="tagbar" style="display:none"></div>
 <div class="crumbs" id="crumbs"></div>
+<div class="catbar" id="catbar"></div>
 
 <main>
   <div class="up" id="uphint">
-    <span>⬆︎ <b>Χωρίς κωδικό</b>: «Αρχεία» ή ολόκληρος «Φάκελος» (ή σύρε τα μέσα). Τα ανεβάσματα πάνε <b>προς έγκριση</b> — δεν εμφανίζονται στη βιβλιοθήκη μέχρι να τα εγκρίνει ο διαχειριστής. Μπες στον φάκελο που ταιριάζουν ώστε να προταθεί σωστός προορισμός. <b>💡 Ίδιο λογότυπο σε πολλές μορφές;</b> Ανέβασέ τες με το <b>ίδιο ακριβώς όνομα</b> και μόνο διαφορετική κατάληξη — π.χ. «76 Σήμα.ai», «76 Σήμα.png», «76 Σήμα.pdf» — για να εμφανίζονται ως <b>ένα</b> γραφικό με λήψη όλων μαζί. 🏷 = ετικέτες · ✅ Έγκριση = πίνακας διαχειριστή.</span>
+    <span>⬆︎ <b>Χωρίς κωδικό</b>: «Αρχεία» ή ολόκληρος «Φάκελος» (ή σύρε τα μέσα). Τα ανεβάσματα πάνε <b>προς έγκριση</b> — δεν εμφανίζονται στη βιβλιοθήκη μέχρι να τα εγκρίνει ο διαχειριστής. Μπες στον φάκελο που ταιριάζουν ώστε να προταθεί σωστός προορισμός. <b>💡 Ίδιο λογότυπο σε πολλές μορφές;</b> Ανέβασέ τες με το <b>ίδιο ακριβώς όνομα</b> και μόνο διαφορετική κατάληξη — π.χ. «76 Σήμα.ai», «76 Σήμα.png», «76 Σήμα.pdf» — για να εμφανίζονται ως <b>ένα</b> γραφικό με λήψη όλων μαζί. 🏷 = ετικέτες · ✅ Έγκριση = πίνακας διαχειριστή. <span id="whoLine"></span></span>
   </div>
   <div class="count" id="count"></div>
   <div class="grid" id="grid"></div>
@@ -137,6 +167,7 @@
 <div class="backdrop" id="backdrop"><div class="modal" id="modal"></div></div>
 <div class="mergebar" id="mergebar">
   <div class="mb-head">🔗 Ένωση <b id="mbCount">0</b> αρχείων σε ένα γραφικό — <span style="font-weight:400;color:var(--muted)">διάλεξε τα ίδια σχέδια, δώσε κοινό όνομα</span></div>
+  <div class="mb-sug" id="mbSug"></div>
   <div class="mb-list" id="mbList"></div>
   <div class="mb-form">
     <input id="mbName" type="text" placeholder="κοινό όνομα (π.χ. 76 Σήμα Ομάδας)">
@@ -144,6 +175,7 @@
   </div>
   <div class="mb-actions"><button class="btn" id="mbGo" disabled>🔗 Ένωσε</button><button class="btn ghost" id="mbCancel">Άκυρο</button></div>
 </div>
+<div class="dlbar" id="dlbar"><span>☑ <b id="pkCount">0</b> γραφικά επιλεγμένα (<span id="pkFiles">0</span> αρχεία)</span><button class="btn" id="pkGo" disabled>⬇︎ Λήψη όλων (.zip)</button><button class="btn ghost" id="pkClear">Καθαρισμός</button><button class="btn ghost" id="pkDone">Τέλος</button></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -171,7 +203,7 @@ function hasTag(id){return !activeTag||tagsOf(id).indexOf(activeTag)>=0;}
 function apiGet(qs){ return fetch(API+"?"+qs).then(function(r){return r.json();}); }
 function apiText(qs){ return fetch(API+"?"+qs).then(function(r){return r.text();}); }
 function apiPost(obj){ return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(obj)}).then(function(r){return r.json();}); }
-function listFolder(id){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")).then(function(res){ if(res&&res.id) cache[res.id]=res; return res; }); }
+function listFolder(id,fresh){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")+(fresh?"&fresh=1":"")).then(function(res){ if(res&&res.id) cache[res.id]=res; return res; }); }
 
 function boot(){
   if(!API||API.indexOf("http")!==0){ setStatus("χωρίς backend","err"); showEmpty("Λείπει το /exec του Apps Script."); return; }
@@ -226,7 +258,7 @@ function folderCard(f){
 }
 function fileCard(fl,subtitle){
   var meta=subtitle?('<span>'+esc(subtitle)+'</span>'):('<span>'+(fl.size?human(fl.size):'')+'</span>');
-  return '<div class="card'+(selFiles[fl.id]?" sel":"")+'" data-file="'+esc(fl.id)+'" data-name="'+esc(fl.name)+'" data-ext="'+esc(fl.ext)+'">'+
+  return '<div class="card'+(selFiles[fl.id]?" sel":"")+(picks[fl.id]?" pick":"")+'" data-eids="'+esc(fl.id)+'" data-etitle="'+esc(entryTitle(fl.name))+'" data-file="'+esc(fl.id)+'" data-name="'+esc(fl.name)+'" data-ext="'+esc(fl.ext)+'">'+
     '<div class="thumb'+(isTransName(fl.name)?" trans":"")+'" data-thumbfor="'+esc(fl.id)+'">'+
       '<div class="exttile"><span class="e">'+esc((fl.ext||"?").toUpperCase())+'</span></div></div>'+
     '<div class="cbody"><div class="cname">'+esc(fl.name)+'</div>'+tagChipsHTML(fl.id)+
@@ -262,11 +294,12 @@ function entryCard(en){
     badges+='<button class="fmt '+extClass(f.ext)+'" data-dl="'+esc(f.id)+'" data-dln="'+esc(f.name)+'" title="Λήψη '+esc((f.ext||"").toUpperCase())+'">'+esc((f.ext||"?").toUpperCase())+'</button>';
   });
   var idsCsv=en.files.map(function(f){return f.id;}).join(",");
-  return '<div class="card">'+
+  var pk=picks[idsCsv]?" pick":"";
+  return '<div class="card'+pk+'" data-eids="'+esc(idsCsv)+'" data-etitle="'+esc(en.title)+'">'+
     '<div class="thumb'+(isTransName(p.name)?" trans":"")+'" data-thumbfor="'+esc(p.id)+'" data-file="'+esc(p.id)+'" data-name="'+esc(p.name)+'" data-ext="'+esc(p.ext)+'">'+
       (multi?('<span class="fmtcount">'+en.exts.length+' μορφές</span>'):"")+
       '<div class="exttile"><span class="e">'+esc((p.ext||"?").toUpperCase())+'</span></div></div>'+
-    '<div class="cbody"><div class="cname">'+esc(en.title)+'</div>'+
+    '<div class="cbody"><div class="cname">'+esc(en.title)+'</div>'+(en.sub?'<div class="csub">'+esc(en.sub)+'</div>':'')+
       '<div class="fmts">'+badges+'</div>'+tagChipsHTML(p.id)+
       '<div class="cmeta"><span class="left"><button class="tagbtn" data-tag-edit="'+esc(p.id)+'" data-tag-name="'+esc(en.title)+'">🏷</button></span>'+
       (multi?('<button class="dl" data-zipids="'+esc(idsCsv)+'" data-zipn="'+esc(en.title)+'">⬇︎ Όλες</button>')
@@ -296,9 +329,40 @@ function suggestBase(names){
   var s=names.slice().sort(function(a,b){return a.length-b.length;})[0]||"";
   return entryTitle(s);
 }
+function coreName(n){
+  var b=String(n).toLowerCase().replace(/\.[a-z0-9]+$/,"");
+  b=b.replace(/\([^)]*\)/g," ").replace(/\bcop(y|ies)\b( ?\d+)?/g," ").replace(/_?\d{2}_\d{2}$/," ");
+  b=b.replace(/^\s*\d{1,2}(?=[a-zα-ω])/,"");
+  return b.replace(/[\s\-_.–—]+/g,"");
+}
+var SUGS=[];
+function mergeSuggestions(){
+  var L=curListing(); if(!L) return [];
+  var fs=L.files.filter(function(f){return f.ext;}), n=fs.length, par=[]; for(var i=0;i<n;i++) par[i]=i;
+  function find(x){ while(par[x]!==x){ par[x]=par[par[x]]; x=par[x]; } return x; }
+  var cores=fs.map(function(f){return coreName(f.name);}), titles=fs.map(function(f){return entryTitle(f.name).toLowerCase();});
+  for(var a=0;a<n;a++) for(var b=a+1;b<n;b++){
+    if(titles[a]===titles[b]) continue;                 // already one entry
+    if(fs[a].ext===fs[b].ext) continue;                 // same format = different design, not a format pair
+    var ca=cores[a], cb=cores[b]; if(ca.length<4||cb.length<4) continue;
+    if(ca===cb || (ca.length>=6&&cb.indexOf(ca)>=0) || (cb.length>=6&&ca.indexOf(cb)>=0)) par[find(a)]=find(b);
+  }
+  var groups={}; for(var k=0;k<n;k++){ var r=find(k); (groups[r]=groups[r]||[]).push(fs[k]); }
+  return Object.keys(groups).map(function(r){return groups[r];}).filter(function(g){
+    if(g.length<2) return false; var t={}; g.forEach(function(f){t[entryTitle(f.name).toLowerCase()]=1;}); return Object.keys(t).length>1; });
+}
+function applySuggestion(i){
+  var g=SUGS[i]; if(!g) return; selFiles={};
+  g.forEach(function(f){ selFiles[f.id]={name:f.name,ext:f.ext}; });
+  Array.prototype.forEach.call(document.querySelectorAll(".card[data-file]"),function(c){ c.classList.toggle("sel",!!selFiles[c.getAttribute("data-file")]); });
+  el("mbName").value=suggestBase(g.map(function(f){return f.name;}));
+  updateMergeBar();
+}
 function updateMergeBar(){
   var bar=el("mergebar"); if(!mergeMode){ bar.style.display="none"; return; }
   bar.style.display="flex";
+  SUGS=mergeSuggestions();
+  el("mbSug").innerHTML = SUGS.length ? ('<b>💡 Προτάσεις:</b> '+SUGS.map(function(g,i){ return '<button class="sugbtn" data-sug="'+i+'" title="'+esc(g.map(function(f){return f.name;}).join("  +  "))+'">'+esc(suggestBase(g.map(function(f){return f.name;})))+' · '+g.map(function(f){return (f.ext||"?").toUpperCase();}).join("+")+'</button>'; }).join(" ")) : '<span style="color:var(--muted)">Καμία αυτόματη πρόταση εδώ — διάλεξε χειροκίνητα.</span>';
   var ids=Object.keys(selFiles);
   el("mbCount").textContent=ids.length;
   el("mbList").innerHTML=ids.map(function(id){return '<span class="mbchip">'+esc(selFiles[id].name)+'</span>';}).join("") || '<span class="mbchip" style="opacity:.6">τίποτα επιλεγμένο</span>';
@@ -339,12 +403,19 @@ function doMerge(){
       exitMerge(); reload();
     });
 }
-function lazyThumbs(){
-  Array.prototype.forEach.call(document.querySelectorAll("[data-thumbfor]"),function(box){
+var THUMB_IO=null;
+function loadThumb(box){
     var id=box.getAttribute("data-thumbfor");
     if(thumbCache[id]!==undefined){ if(thumbCache[id]) box.innerHTML='<img src="'+esc(thumbCache[id])+'" alt="">'; return; }
-    apiText("action=thumb&id="+encodeURIComponent(id)).then(function(u){ u=(u||"").trim(); thumbCache[id]=u; if(u){ var b=document.querySelector('[data-thumbfor="'+id+'"]'); if(b) b.innerHTML='<img src="'+esc(u)+'" alt="">'; } }).catch(function(){ thumbCache[id]=""; });
-  });
+    thumbCache[id]=null;  // in flight
+    apiText("action=thumb&id="+encodeURIComponent(id)).then(function(u){ u=(u||"").trim(); thumbCache[id]=u; if(u){ Array.prototype.forEach.call(document.querySelectorAll('[data-thumbfor="'+id+'"]'),function(b){ b.innerHTML='<img src="'+esc(u)+'" alt="" loading="lazy">'; }); } }).catch(function(){ thumbCache[id]=""; });
+}
+function lazyThumbs(){
+  var boxes=document.querySelectorAll("[data-thumbfor]");
+  if(!("IntersectionObserver" in window)){ Array.prototype.forEach.call(boxes,loadThumb); return; }
+  if(THUMB_IO) THUMB_IO.disconnect();
+  THUMB_IO=new IntersectionObserver(function(ents){ ents.forEach(function(en){ if(en.isIntersecting){ THUMB_IO.unobserve(en.target); loadThumb(en.target); } }); },{rootMargin:"400px"});
+  Array.prototype.forEach.call(boxes,function(b){ THUMB_IO.observe(b); });
 }
 
 /* ---------- navigation ---------- */
@@ -356,35 +427,99 @@ function goFolder(id,name){
 }
 function goCrumb(i){ if(i<0)i=0; path=path.slice(0,i+1); activeTag=""; if(el("q").value) el("q").value=""; render(); buildTagBar(); pushDepth(); }
 function reload(){
-  var id=cur().id; delete cache[id]; TREE=null; showLoading();
-  Promise.all([listFolder(id),apiGet("action=labels").then(function(r){LABELS=(r&&r.labels)||LABELS;}).catch(function(){})])
+  if(catalogMode){ CATALOG=null; loadCatalog(true); return; }
+  var id=cur().id; delete cache[id]; TREE=null; CATALOG=null; showLoading();
+  Promise.all([listFolder(id,true),apiGet("action=labels").then(function(r){LABELS=(r&&r.labels)||LABELS;}).catch(function(){})])
     .then(function(){ setStatus("συνδεδεμένο ✓","ok"); buildTagBar(); if(el("q").value.trim()) doSearch(el("q").value); else render(); })
     .catch(function(){ setStatus("εκτός σύνδεσης","err"); showEmpty("Αποτυχία ανανέωσης."); });
 }
 
-/* ---------- search (lazy full tree) ---------- */
-function flatten(node,trail,acc){
-  (node.files||[]).forEach(function(f){ acc.push({f:f,trail:trail}); });
-  (node.folders||[]).forEach(function(fo){ flatten(fo.node,trail+" / "+fo.name,acc); });
-  return acc;
+/* ---------- search (uses the cached flat catalog) ---------- */
+var CATALOG=null, CAT_LOADING=null;
+function fetchCatalog(fresh){
+  if(CATALOG && !fresh) return Promise.resolve(CATALOG);
+  if(CAT_LOADING && !fresh) return CAT_LOADING;
+  CAT_LOADING = apiGet("action=catalog"+(fresh?"&fresh=1":"")).then(function(res){ CAT_LOADING=null; if(!res||res.error) throw new Error((res&&res.error)||"catalog"); CATALOG=res.items||[]; return CATALOG; })
+    .catch(function(e){ CAT_LOADING=null; throw e; });
+  return CAT_LOADING;
 }
+function catToFile(x){ return {id:x.id,name:x.n,ext:x.e,size:x.s,isImg:!!RASTER[x.e]}; }
 function runSearch(q){
   q=q.trim().toLowerCase();
-  el("crumbs").innerHTML='<a data-i="-1">🏠 '+esc(TREE.name)+'</a><span class="sep">›</span><span class="cur">Αναζήτηση «'+esc(q)+'»</span>';
-  var hits=flatten(TREE.node,TREE.name,[]).filter(function(x){ return x.f.name.toLowerCase().indexOf(q)>=0 && hasTag(x.f.id); });
-  if(!hits.length){ showEmpty("Κανένα αρχείο για «"+esc(q)+"»."); el("count").textContent="0 αρχεία"; return; }
+  if(catalogMode){ renderCatalog(); return; }
+  el("crumbs").innerHTML='<a data-i="-1">🏠 '+esc(path[0]?path[0].name:"")+'</a><span class="sep">›</span><span class="cur">Αναζήτηση «'+esc(q)+'»</span>';
+  var hits=CATALOG.filter(function(x){ return (x.n.toLowerCase().indexOf(q)>=0 || x.p.toLowerCase().indexOf(q)>=0) && hasTag(x.id); });
+  if(!hits.length){ showEmpty("Κανένα αρχείο για «"+q+"»."); el("count").textContent="0 αρχεία"; return; }
   el("empty").style.display="none"; el("grid").style.display="grid";
-  el("grid").innerHTML=hits.map(function(x){ return fileCard(x.f,x.trail.replace(TREE.name+" / ","")); }).join("");
-  el("count").textContent=hits.length+" αρχεία"; lazyThumbs();
+  // group search hits into entries per folder (same logo, all formats)
+  var byFolder={}; hits.forEach(function(x){ (byFolder[x.p]=byFolder[x.p]||[]).push(x); });
+  var ents=[]; Object.keys(byFolder).forEach(function(pth){ groupEntries(byFolder[pth].map(catToFile)).forEach(function(en){ en.sub=pth; ents.push(en); }); });
+  el("grid").innerHTML=ents.map(entryCard).join("");
+  el("count").textContent=ents.length+" λογότυπα ("+hits.length+" αρχεία)"; lazyThumbs();
 }
 function doSearch(q){
+  if(catalogMode){ renderCatalog(); return; }
   if(!q.trim()){ render(); return; }
-  if(TREE){ runSearch(q); return; }
+  if(CATALOG){ runSearch(q); return; }
   el("crumbs").innerHTML='<span class="cur">Αναζήτηση…</span>';
-  showEmpty("Χτίζω ευρετήριο (μια φορά, μπορεί να αργήσει λίγο)…"); el("count").textContent="";
-  apiGet("action=tree").then(function(res){ if(res.error) throw new Error(res.error); TREE=res;
-    if(el("q").value.trim()) runSearch(el("q").value); else render(); })
-    .catch(function(err){ showEmpty("Η αναζήτηση απέτυχε ("+esc(String(err.message||err))+")."); });
+  showEmpty("Φορτώνω το ευρετήριο…"); el("count").textContent="";
+  fetchCatalog(false).then(function(){ if(el("q").value.trim()) runSearch(el("q").value); else render(); })
+    .catch(function(err){ showEmpty("Η αναζήτηση απέτυχε ("+String(err.message||err)+")."); });
+}
+
+/* ---------- 📚 Κατάλογος: every logo of the library on one page ---------- */
+var catalogMode=false, catCat="", catFmt="";
+function enterCatalog(){ catalogMode=true; el("catBtn").classList.add("y"); if(mergeMode) exitMerge(); loadCatalog(false); }
+function exitCatalog(){ catalogMode=false; catCat=""; catFmt=""; el("catBtn").classList.remove("y"); el("catbar").style.display="none"; el("uphint").style.display=""; if(el("q").value.trim()) doSearch(el("q").value); else render(); }
+function loadCatalog(fresh){
+  el("crumbs").innerHTML='<span class="cur">📚 Κατάλογος…</span>'; showEmpty("Φορτώνω όλα τα λογότυπα…"); el("count").textContent="";
+  fetchCatalog(fresh).then(renderCatalog).catch(function(err){ showEmpty("Ο κατάλογος δεν φόρτωσε ("+String(err.message||err)+")."); });
+}
+function renderCatalog(){
+  if(!CATALOG){ loadCatalog(false); return; }
+  el("uphint").style.display="none";
+  var q=el("q").value.trim().toLowerCase();
+  var byFolder={}; CATALOG.forEach(function(x){ if(!hasTag(x.id)) return; (byFolder[x.p]=byFolder[x.p]||[]).push(x); });
+  var all=[]; Object.keys(byFolder).sort(function(a,b){return a.localeCompare(b);}).forEach(function(pth){
+    groupEntries(byFolder[pth].map(catToFile)).forEach(function(en){ en.sub=pth; en.cat=(pth.split(" / ")[0]||"—"); all.push(en); }); });
+  // filter bars
+  var cats={}, fmts={}; all.forEach(function(en){ cats[en.cat]=(cats[en.cat]||0)+1; en.exts.forEach(function(x){ fmts[x]=(fmts[x]||0)+1; }); });
+  var bar='<span class="lbl">Ενότητα</span><span class="tagchip'+(catCat===""?" on":"")+'" data-ccat="">Όλες</span>'+
+    Object.keys(cats).sort(function(a,b){return a.localeCompare(b);}).map(function(c){return '<span class="tagchip'+(catCat===c?" on":"")+'" data-ccat="'+esc(c)+'">'+esc(c)+' <span style="opacity:.6">'+cats[c]+'</span></span>';}).join("")+
+    '<span class="lbl">Μορφή</span><span class="tagchip'+(catFmt===""?" on":"")+'" data-cfmt="">Όλες</span>'+
+    Object.keys(fmts).sort().map(function(f){return '<span class="tagchip'+(catFmt===f?" on":"")+'" data-cfmt="'+esc(f)+'">'+esc(f.toUpperCase())+'</span>';}).join("");
+  var cb=el("catbar"); cb.innerHTML=bar; cb.style.display="flex";
+  var list=all.filter(function(en){
+    if(catCat && en.cat!==catCat) return false;
+    if(catFmt && en.exts.indexOf(catFmt)<0) return false;
+    if(q && (en.title+" "+en.sub).toLowerCase().indexOf(q)<0) return false;
+    return true; });
+  el("crumbs").innerHTML='<a data-i="0">🏠 '+esc(path[0]?path[0].name:"")+'</a><span class="sep">›</span><span class="cur">📚 Κατάλογος</span>';
+  if(!list.length){ showEmpty("Κανένα λογότυπο με αυτά τα φίλτρα."); el("count").textContent="0 λογότυπα"; return; }
+  el("empty").style.display="none"; el("grid").style.display="grid";
+  el("grid").innerHTML=list.map(entryCard).join("");
+  el("count").textContent=list.length+" λογότυπα"+(list.length!==all.length?(" (από "+all.length+")"):"")+" · 📚 κατάλογος"; lazyThumbs();
+}
+
+/* ---------- ☑ Επιλογή: pick many logos → one zip ---------- */
+var pickMode=false, picks={};
+function enterPick(){ pickMode=true; el("pickBtn").classList.add("y"); if(mergeMode) exitMerge(); updatePickBar(); toast("Πάτα πάνω στα γραφικά που θες· μετά «Λήψη όλων»."); }
+function exitPick(){ pickMode=false; picks={}; el("pickBtn").classList.remove("y"); el("dlbar").style.display="none"; Array.prototype.forEach.call(document.querySelectorAll(".card.pick"),function(c){c.classList.remove("pick");}); }
+function togglePick(card){
+  var k=card.getAttribute("data-eids"); if(!k) return;
+  if(picks[k]){ delete picks[k]; card.classList.remove("pick"); } else { picks[k]=card.getAttribute("data-etitle")||"γραφικό"; card.classList.add("pick"); }
+  updatePickBar();
+}
+function updatePickBar(){
+  var bar=el("dlbar"); if(!pickMode){ bar.style.display="none"; return; }
+  bar.style.display="flex";
+  var keys=Object.keys(picks), nfiles=0; keys.forEach(function(k){ nfiles+=k.split(",").length; });
+  el("pkCount").textContent=keys.length; el("pkFiles").textContent=nfiles; el("pkGo").disabled=!keys.length;
+}
+function downloadPicks(){
+  var keys=Object.keys(picks); if(!keys.length) return;
+  var ids=keys.join(","), nm = keys.length===1 ? picks[keys[0]] : ("76 γραφικά ("+keys.length+")");
+  downloadAllFormats(ids, nm);
 }
 
 /* ---------- download (file & folder-zip) ---------- */
@@ -431,15 +566,22 @@ function closeModal(){ el("backdrop").classList.remove("show"); }
 /* ---------- upload (files, folder, drag-drop) ---------- */
 function dirName(p){ p=p||""; var i=p.lastIndexOf("/"); return i>=0?p.slice(0,i):""; }
 function finishUp(okc,n,target,tname){ toast(okc+"/"+n+" στάλθηκαν προς έγκριση (προτεινόμενο: «"+tname+"»).",okc<n); }
+function uploaderName(force){
+  var n=""; try{ n=localStorage.getItem("gx_name")||""; }catch(e){}
+  if(force||!n){ var v=prompt("Το όνομά σου (για να ξέρει ο διαχειριστής ποιος ανέβασε τι):", n); if(v===null) return force?n:""; n=v.trim(); try{ localStorage.setItem("gx_name",n); }catch(e){} }
+  renderWho(); return n;
+}
+function renderWho(){ var w=el("whoLine"); if(!w) return; var n=""; try{ n=localStorage.getItem("gx_name")||""; }catch(e){} w.innerHTML = n ? ('· Ανεβάζεις ως <span class="who" id="whoEdit">'+esc(n)+'</span>') : ''; }
 function pushUploads(entries){
-  if(el("q").value.trim()){ toast("Βγες από την αναζήτηση για να ανεβάσεις σε φάκελο.",true); return; }
+  if(el("q").value.trim()||catalogMode){ toast("Βγες από την αναζήτηση/κατάλογο για να ανεβάσεις σε φάκελο.",true); return; }
+  var who=uploaderName(false); if(!who){ toast("Χρειάζεται όνομα για το ανέβασμα.",true); return; }
   var target=cur().id, tname=cur().name, n=entries.length; if(!n) return;
   var done=0,okc=0; toast("Ανέβασμα "+n+" αρχείων στο «"+tname+"»…");
   entries.forEach(function(en){
     var r=new FileReader();
     r.onload=function(){
       var b64=String(r.result).split(",")[1]||"";
-      apiPost({action:"upload",folderId:target,relPath:en.relDir||"",name:en.file.name,mime:en.file.type||"application/octet-stream",b64:b64})
+      apiPost({action:"upload",folderId:target,relPath:en.relDir||"",by:who,name:en.file.name,mime:en.file.type||"application/octet-stream",b64:b64})
         .then(function(res){ done++; if(res&&res.ok) okc++; else toast("Απέτυχε: "+esc(en.file.name),true); if(done===n) finishUp(okc,n,target,tname); })
         .catch(function(){ done++; if(done===n) finishUp(okc,n,target,tname); });
     };
@@ -518,7 +660,7 @@ function modAct(obj,label){
   apiPost(obj).then(function(res){
     if(res && res.error){ toast("Σφάλμα: "+esc(res.error), true); if(res.error==="bad key"){ localStorage.removeItem("gx_admin"); } return; }
     toast(res.movedTo ? ("Εγκρίθηκε → «"+esc(res.movedTo)+"»") : "Απορρίφθηκε.");
-    TREE=null; if(obj.action==="approve"&&res.movedTo){ delete cache[obj.toFolderId||""]; }
+    TREE=null; CATALOG=null; if(obj.action==="approve"&&res.movedTo){ delete cache[obj.toFolderId||""]; }
     loadModeration();
   }).catch(function(){ toast("Πρόβλημα σύνδεσης.", true); });
 }
@@ -526,6 +668,11 @@ function modAct(obj,label){
 /* ---------- events ---------- */
 function wire(){
   el("grid").addEventListener("click",function(e){
+    if(pickMode){
+      var pf=e.target.closest("[data-folder]"); if(pf){ if(catalogMode) exitCatalog(); goFolder(pf.getAttribute("data-folder"),pf.getAttribute("data-fname")); return; }
+      var pc=e.target.closest(".card[data-eids]"); if(pc){ e.stopPropagation(); togglePick(pc); return; }
+      return;
+    }
     if(mergeMode){
       var mf=e.target.closest("[data-folder]"); if(mf){ goFolder(mf.getAttribute("data-folder"),mf.getAttribute("data-fname")); return; }
       var mfi=e.target.closest("[data-file]"); if(mfi){ e.stopPropagation(); toggleSel(mfi.getAttribute("data-file"),mfi.getAttribute("data-name"),mfi.getAttribute("data-ext"),mfi); return; }
@@ -550,6 +697,15 @@ function wire(){
   el("mbCancel").addEventListener("click",exitMerge);
   el("mbGo").addEventListener("click",doMerge);
   el("mbName").addEventListener("input",updateMergeBar);
+  el("mbSug").addEventListener("click",function(e){ var b=e.target.closest("[data-sug]"); if(b) applySuggestion(+b.getAttribute("data-sug")); });
+  el("catBtn").addEventListener("click",function(){ if(catalogMode) exitCatalog(); else enterCatalog(); });
+  el("catbar").addEventListener("click",function(e){ var c=e.target.closest("[data-ccat]"); if(c){ catCat=c.getAttribute("data-ccat"); renderCatalog(); return; } var f=e.target.closest("[data-cfmt]"); if(f){ catFmt=f.getAttribute("data-cfmt"); renderCatalog(); } });
+  el("pickBtn").addEventListener("click",function(){ if(pickMode) exitPick(); else enterPick(); });
+  el("pkGo").addEventListener("click",downloadPicks);
+  el("pkClear").addEventListener("click",function(){ picks={}; Array.prototype.forEach.call(document.querySelectorAll(".card.pick"),function(c){c.classList.remove("pick");}); updatePickBar(); });
+  el("pkDone").addEventListener("click",exitPick);
+  el("uphint").addEventListener("click",function(e){ if(e.target.id==="whoEdit") uploaderName(true); });
+  renderWho();
   el("modal").addEventListener("click",function(e){
     var ap=e.target.closest("[data-approve]"); if(ap){ modAct({action:"approve",id:ap.getAttribute("data-approve")},"Έγκριση"); return; }
     var ah=e.target.closest("[data-approvehere]"); if(ah){ modAct({action:"approve",id:ah.getAttribute("data-approvehere"),toFolderId:cur().id},"Έγκριση εδώ"); return; }
