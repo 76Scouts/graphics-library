@@ -182,7 +182,6 @@
 var API = "https://script.google.com/macros/s/AKfycbyN8_vX2Xi7tErx1LysAn2axU8NhZAq21UHRzkJBeF5dMgewt-dEq9xw0-BYHiPcM-q/exec";
 var path=[];          // [{id,name}]
 var cache={};         // id -> listing {id,name,folders,files}
-var TREE=null;        // full tree for search (lazy)
 var thumbCache={};
 var LABELS={};        // id -> [tags]  (app-level, from _labels.json)
 var activeTag="";
@@ -428,7 +427,7 @@ function goFolder(id,name){
 function goCrumb(i){ if(i<0)i=0; path=path.slice(0,i+1); activeTag=""; if(el("q").value) el("q").value=""; render(); buildTagBar(); pushDepth(); }
 function reload(){
   if(catalogMode){ CATALOG=null; loadCatalog(true); return; }
-  var id=cur().id; delete cache[id]; TREE=null; CATALOG=null; showLoading();
+  var id=cur().id; delete cache[id]; CATALOG=null; showLoading();
   Promise.all([listFolder(id,true),apiGet("action=labels").then(function(r){LABELS=(r&&r.labels)||LABELS;}).catch(function(){})])
     .then(function(){ setStatus("συνδεδεμένο ✓","ok"); buildTagBar(); if(el("q").value.trim()) doSearch(el("q").value); else render(); })
     .catch(function(){ setStatus("εκτός σύνδεσης","err"); showEmpty("Αποτυχία ανανέωσης."); });
@@ -443,6 +442,8 @@ function fetchCatalog(fresh){
     .catch(function(e){ CAT_LOADING=null; throw e; });
   return CAT_LOADING;
 }
+var SLOW_T=null;
+function slowHint(){ clearTimeout(SLOW_T); SLOW_T=setTimeout(function(){ if(CAT_LOADING){ var e=el("empty"); if(e&&e.style.display!=="none") e.textContent="⏳ Ο κατάλογος ενημερώνεται μετά από πρόσφατη αλλαγή — μπορεί να πάρει έως 1 λεπτό. Μην κλείσεις τη σελίδα."; } },6000); }
 function catToFile(x){ return {id:x.id,name:x.n,ext:x.e,size:x.s,isImg:!!RASTER[x.e]}; }
 function runSearch(q){
   q=q.trim().toLowerCase();
@@ -462,7 +463,7 @@ function doSearch(q){
   if(!q.trim()){ render(); return; }
   if(CATALOG){ runSearch(q); return; }
   el("crumbs").innerHTML='<span class="cur">Αναζήτηση…</span>';
-  showEmpty("Φορτώνω το ευρετήριο…"); el("count").textContent="";
+  showEmpty("Φορτώνω το ευρετήριο…"); el("count").textContent=""; slowHint();
   fetchCatalog(false).then(function(){ if(el("q").value.trim()) runSearch(el("q").value); else render(); })
     .catch(function(err){ showEmpty("Η αναζήτηση απέτυχε ("+String(err.message||err)+")."); });
 }
@@ -472,7 +473,7 @@ var catalogMode=false, catCat="", catFmt="";
 function enterCatalog(){ catalogMode=true; el("catBtn").classList.add("y"); if(mergeMode) exitMerge(); loadCatalog(false); }
 function exitCatalog(){ catalogMode=false; catCat=""; catFmt=""; el("catBtn").classList.remove("y"); el("catbar").style.display="none"; el("uphint").style.display=""; if(el("q").value.trim()) doSearch(el("q").value); else render(); }
 function loadCatalog(fresh){
-  el("crumbs").innerHTML='<span class="cur">📚 Κατάλογος…</span>'; showEmpty("Φορτώνω όλα τα λογότυπα…"); el("count").textContent="";
+  el("crumbs").innerHTML='<span class="cur">📚 Κατάλογος…</span>'; showEmpty("Φορτώνω όλα τα λογότυπα…"); el("count").textContent=""; slowHint();
   fetchCatalog(fresh).then(renderCatalog).catch(function(err){ showEmpty("Ο κατάλογος δεν φόρτωσε ("+String(err.message||err)+")."); });
 }
 function renderCatalog(){
@@ -481,11 +482,11 @@ function renderCatalog(){
   var q=el("q").value.trim().toLowerCase();
   var byFolder={}; CATALOG.forEach(function(x){ if(!hasTag(x.id)) return; (byFolder[x.p]=byFolder[x.p]||[]).push(x); });
   var all=[]; Object.keys(byFolder).sort(function(a,b){return a.localeCompare(b);}).forEach(function(pth){
-    groupEntries(byFolder[pth].map(catToFile)).forEach(function(en){ en.sub=pth; en.cat=(pth.split(" / ")[0]||"—"); all.push(en); }); });
+    groupEntries(byFolder[pth].map(catToFile)).forEach(function(en){ en.sub=pth; en.cat=(pth.split(" / ")[0]||""); all.push(en); }); });
   // filter bars
   var cats={}, fmts={}; all.forEach(function(en){ cats[en.cat]=(cats[en.cat]||0)+1; en.exts.forEach(function(x){ fmts[x]=(fmts[x]||0)+1; }); });
   var bar='<span class="lbl">Ενότητα</span><span class="tagchip'+(catCat===""?" on":"")+'" data-ccat="">Όλες</span>'+
-    Object.keys(cats).sort(function(a,b){return a.localeCompare(b);}).map(function(c){return '<span class="tagchip'+(catCat===c?" on":"")+'" data-ccat="'+esc(c)+'">'+esc(c)+' <span style="opacity:.6">'+cats[c]+'</span></span>';}).join("")+
+    Object.keys(cats).filter(function(c){return c;}).sort(function(a,b){return a.localeCompare(b);}).map(function(c){return '<span class="tagchip'+(catCat===c?" on":"")+'" data-ccat="'+esc(c)+'">'+esc(c)+' <span style="opacity:.6">'+cats[c]+'</span></span>';}).join("")+
     '<span class="lbl">Μορφή</span><span class="tagchip'+(catFmt===""?" on":"")+'" data-cfmt="">Όλες</span>'+
     Object.keys(fmts).sort().map(function(f){return '<span class="tagchip'+(catFmt===f?" on":"")+'" data-cfmt="'+esc(f)+'">'+esc(f.toUpperCase())+'</span>';}).join("");
   var cb=el("catbar"); cb.innerHTML=bar; cb.style.display="flex";
@@ -660,7 +661,7 @@ function modAct(obj,label){
   apiPost(obj).then(function(res){
     if(res && res.error){ toast("Σφάλμα: "+esc(res.error), true); if(res.error==="bad key"){ localStorage.removeItem("gx_admin"); } return; }
     toast(res.movedTo ? ("Εγκρίθηκε → «"+esc(res.movedTo)+"»") : "Απορρίφθηκε.");
-    TREE=null; CATALOG=null; if(obj.action==="approve"&&res.movedTo){ delete cache[obj.toFolderId||""]; }
+    CATALOG=null; if(obj.action==="approve"&&res.movedTo){ delete cache[obj.toFolderId||""]; }
     loadModeration();
   }).catch(function(){ toast("Πρόβλημα σύνδεσης.", true); });
 }
