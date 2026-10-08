@@ -202,20 +202,31 @@ function hasTag(id){return !activeTag||tagsOf(id).indexOf(activeTag)>=0;}
 function apiGet(qs){ return fetch(API+"?"+qs).then(function(r){return r.json();}); }
 function apiText(qs){ return fetch(API+"?"+qs).then(function(r){return r.text();}); }
 function apiPost(obj){ return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(obj)}).then(function(r){return r.json();}); }
-function listFolder(id,fresh){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")+(fresh?"&fresh=1":"")).then(function(res){ if(res&&res.id) cache[res.id]=res; return res; }); }
+/* ---- remembered snapshots: show the index instantly, refresh quietly in the background ---- */
+function snapGet(k){ try{ var v=localStorage.getItem("gx_s_"+k); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function snapPut(k,v){ try{ localStorage.setItem("gx_s_"+k,JSON.stringify(v)); }catch(e){ try{ Object.keys(localStorage).forEach(function(x){ if(x.indexOf("gx_s_L")===0) localStorage.removeItem(x); }); }catch(e2){} } }
+function quietOK(){ return !catalogMode && !el("q").value.trim(); }
+function listFolder(id,fresh){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")+(fresh?"&fresh=1":"")).then(function(res){ if(res&&res.id){ cache[res.id]=res; snapPut("L"+res.id,res); if(!id) snapPut("Lroot",res); } return res; }); }
 
 function boot(){
   if(!API||API.indexOf("http")!==0){ setStatus("χωρίς backend","err"); showEmpty("Λείπει το /exec του Apps Script."); return; }
-  setStatus("σύνδεση…");
+  var snap=snapGet("Lroot"), shown=false;
+  if(snap&&snap.id){
+    cache[snap.id]=snap; LABELS=snapGet("LBL")||{};
+    path=[{id:snap.id,name:snap.name}]; try{history.replaceState({depth:1},"");}catch(e){}
+    buildTagBar(); render(); shown=true; setStatus("ανανέωση…");
+  } else setStatus("σύνδεση…");
+  apiGet("action=labels").then(function(r){ var L=(r&&r.labels)||{}; var ch=JSON.stringify(L)!==JSON.stringify(LABELS); LABELS=L; snapPut("LBL",L); if(ch&&path.length){ buildTagBar(); if(quietOK()) render(); } }).catch(function(){});
   listFolder(null).then(function(root){
     if(!root||root.error||!root.id) throw new Error(root&&root.error||"no root");
-    path=[{id:root.id,name:root.name}]; try{history.replaceState({depth:1},"");}catch(e){} setStatus("συνδεδεμένο ✓","ok");
-    apiGet("action=labels").then(function(r){ LABELS=(r&&r.labels)||{}; buildTagBar(); render(); }).catch(function(){ render(); });
-  }).catch(function(err){ setStatus("εκτός σύνδεσης","err");
+    setStatus("συνδεδεμένο ✓","ok");
+    if(!shown){ path=[{id:root.id,name:root.name}]; try{history.replaceState({depth:1},"");}catch(e){} buildTagBar(); render(); }
+    else if(path.length===1&&quietOK()&&JSON.stringify(root)!==JSON.stringify(snap)) render();
+  }).catch(function(err){
+    if(shown){ setStatus("εκτός σύνδεσης (αποθηκευμένη προβολή)","err"); return; }
+    setStatus("εκτός σύνδεσης","err");
     showEmpty("Δεν φόρτωσε ("+esc(String(err.message||err))+"). Αν είσαι σε browser με πολλά Google logins, δοκίμασε incognito ή κινητό."); });
 }
-
-/* ---------- tags ---------- */
 function allTags(){ var s={}; for(var k in LABELS){ (LABELS[k]||[]).forEach(function(t){ s[t]=1; }); } return Object.keys(s).sort(function(a,b){return a.localeCompare(b);}); }
 function buildTagBar(){
   var tags=allTags(); var bar=el("tagbar");
@@ -403,11 +414,35 @@ function doMerge(){
     });
 }
 var THUMB_IO=null;
+/* thumbnails: 1) memory  2) IndexedDB (kept between visits)  3) server in batches of 10, max 3 batches in flight */
+var IDBP=null;
+function idb(){ if(IDBP) return IDBP; IDBP=new Promise(function(res){ try{ var rq=indexedDB.open("gx76",1); rq.onupgradeneeded=function(){ rq.result.createObjectStore("t"); }; rq.onsuccess=function(){ res(rq.result); }; rq.onerror=function(){ res(null); }; }catch(e){ res(null); } }); return IDBP; }
+function idbGetMany(ids){ return idb().then(function(db){ if(!db) return {}; return new Promise(function(res){ var out={}, n=ids.length; if(!n) return res(out); try{ var st=db.transaction("t").objectStore("t"); ids.forEach(function(id){ var r=st.get(id); r.onsuccess=function(){ var v=r.result; if(v&&(Date.now()-v.t)<(v.u?2592000000:604800000)) out[id]=v.u; if(--n===0) res(out); }; r.onerror=function(){ if(--n===0) res(out); }; }); }catch(e){ res(out); } }); }); }
+function idbPutMany(map){ idb().then(function(db){ if(!db) return; try{ var st=db.transaction("t","readwrite").objectStore("t"), t=Date.now(); Object.keys(map).forEach(function(id){ st.put({u:map[id],t:t},id); }); }catch(e){} }); }
+function paintThumb(id,u){ thumbCache[id]=u; if(!u) return; Array.prototype.forEach.call(document.querySelectorAll('[data-thumbfor="'+id+'"]'),function(b){ if(!b.querySelector("img")) b.innerHTML='<img src="'+esc(u)+'" alt="">'; }); }
+var TQ=[], TQT=null, TBQ=[], TINF=0;
 function loadThumb(box){
     var id=box.getAttribute("data-thumbfor");
     if(thumbCache[id]!==undefined){ if(thumbCache[id]) box.innerHTML='<img src="'+esc(thumbCache[id])+'" alt="">'; return; }
-    thumbCache[id]=null;  // in flight
-    apiText("action=thumb&id="+encodeURIComponent(id)).then(function(u){ u=(u||"").trim(); thumbCache[id]=u; if(u){ Array.prototype.forEach.call(document.querySelectorAll('[data-thumbfor="'+id+'"]'),function(b){ b.innerHTML='<img src="'+esc(u)+'" alt="" loading="lazy">'; }); } }).catch(function(){ thumbCache[id]=""; });
+    thumbCache[id]=null; TQ.push(id); clearTimeout(TQT); TQT=setTimeout(flushThumbs,30);
+}
+function flushThumbs(){
+  var ids=TQ.splice(0); if(!ids.length) return;
+  idbGetMany(ids).then(function(m){
+    var miss=[]; ids.forEach(function(id){ if(m[id]!==undefined) paintThumb(id,m[id]); else miss.push(id); });
+    for(var i=0;i<miss.length;i+=10) TBQ.push(miss.slice(i,i+10));
+    pumpThumbs();
+  });
+}
+function pumpThumbs(){ while(TINF<3&&TBQ.length) sendThumbBatch(TBQ.shift()); }
+function sendThumbBatch(ch){
+  TINF++;
+  apiGet("action=thumbs&ids="+ch.join(",")).then(function(res){
+    if(!res||!res.thumbs) throw new Error("no batch");
+    var save={}; ch.forEach(function(id){ var u=res.thumbs[id]||""; paintThumb(id,u); save[id]=u; }); idbPutMany(save);
+  }).catch(function(){   // older backend: one by one
+    ch.forEach(function(id){ apiText("action=thumb&id="+encodeURIComponent(id)).then(function(u){ u=(u||"").trim(); paintThumb(id,u); var o={}; o[id]=u; idbPutMany(o); }).catch(function(){ thumbCache[id]=""; }); });
+  }).then(function(){ TINF--; pumpThumbs(); });
 }
 function lazyThumbs(){
   var boxes=document.querySelectorAll("[data-thumbfor]");
@@ -421,6 +456,10 @@ function lazyThumbs(){
 function goFolder(id,name){
   activeTag=""; path.push({id:id,name:name}); pushDepth();
   if(cache[id]){ render(); buildTagBar(); window.scrollTo(0,0); }
+  else if(snapGet("L"+id)){
+    var sn=snapGet("L"+id); cache[id]=sn; render(); buildTagBar(); window.scrollTo(0,0);
+    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&JSON.stringify(res)!==JSON.stringify(sn)){ render(); buildTagBar(); } }).catch(function(){});
+  }
   else { showLoading(); listFolder(id).then(function(res){ if(res&&res.error) throw new Error(res.error); render(); buildTagBar(); window.scrollTo(0,0); })
     .catch(function(err){ path.pop(); toast("Σφάλμα φακέλου: "+esc(String(err.message||err)),true); render(); }); }
 }
@@ -437,10 +476,15 @@ function reload(){
 var CATALOG=null, CAT_LOADING=null;
 function fetchCatalog(fresh){
   if(CATALOG && !fresh) return Promise.resolve(CATALOG);
+  if(!fresh && !CATALOG){ var cs=snapGet("CAT"); if(cs&&cs.length){ CATALOG=cs; refreshCatalogQuietly(); return Promise.resolve(CATALOG); } }
   if(CAT_LOADING && !fresh) return CAT_LOADING;
-  CAT_LOADING = apiGet("action=catalog"+(fresh?"&fresh=1":"")).then(function(res){ CAT_LOADING=null; if(!res||res.error) throw new Error((res&&res.error)||"catalog"); CATALOG=res.items||[]; return CATALOG; })
+  CAT_LOADING = apiGet("action=catalog"+(fresh?"&fresh=1":"")).then(function(res){ CAT_LOADING=null; if(!res||res.error) throw new Error((res&&res.error)||"catalog"); CATALOG=res.items||[]; snapPut("CAT",CATALOG); return CATALOG; })
     .catch(function(e){ CAT_LOADING=null; throw e; });
   return CAT_LOADING;
+}
+function refreshCatalogQuietly(){
+  apiGet("action=catalog").then(function(res){ if(!res||res.error||!res.items) return; var ch=JSON.stringify(res.items)!==JSON.stringify(CATALOG); CATALOG=res.items; snapPut("CAT",CATALOG);
+    if(ch){ if(catalogMode) renderCatalog(); else if(el("q").value.trim()) runSearch(el("q").value); } }).catch(function(){});
 }
 var SLOW_T=null;
 function slowHint(){ clearTimeout(SLOW_T); SLOW_T=setTimeout(function(){ if(CAT_LOADING){ var e=el("empty"); if(e&&e.style.display!=="none") e.textContent="⏳ Ο κατάλογος ενημερώνεται μετά από πρόσφατη αλλαγή — μπορεί να πάρει έως 1 λεπτό. Μην κλείσεις τη σελίδα."; } },6000); }
