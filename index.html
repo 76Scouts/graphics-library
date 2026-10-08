@@ -224,6 +224,8 @@ function staticListing(id){
     folders:(SIDX.fo[id]||[]).map(function(f){ return {name:f.n,id:f.id}; }).sort(byName),
     files:(SIDX.fi[id]||[]).map(function(x){ return {name:x.n,id:x.id,ext:x.e,isImg:IMGX.test(x.e||""),size:x.s}; }).sort(byName) };
 }
+function listSig(L){ if(!L) return ""; var f=(L.folders||[]).map(function(x){return x.id+"|"+x.name;}).sort(), g=(L.files||[]).map(function(x){return x.id+"|"+x.name;}).sort(); return f.join(",")+"#"+g.join(","); }
+function sameListing(a,b){ return listSig(a)===listSig(b); }
 function quietOK(){ return !catalogMode && !el("q").value.trim(); }
 function listFolder(id,fresh){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")+(fresh?"&fresh=1":"")).then(function(res){ if(res&&res.id){ cache[res.id]=res; snapPut("L"+res.id,res); if(!id) snapPut("Lroot",res); } return res; }); }
 
@@ -242,7 +244,7 @@ function boot(){
     if(!root||root.error||!root.id) throw new Error(root&&root.error||"no root");
     setStatus("συνδεδεμένο ✓","ok");
     if(!shown){ path=[{id:root.id,name:root.name}]; try{history.replaceState({depth:1},"");}catch(e){} buildTagBar(); render(); }
-    else if(path.length===1&&quietOK()&&JSON.stringify(root)!==JSON.stringify(snap)) render();
+    else if(path.length===1&&quietOK()&&!sameListing(root,snap)) render();
   }).catch(function(err){
     if(shown){ setStatus("εκτός σύνδεσης (αποθηκευμένη προβολή)","err"); return; }
     setStatus("εκτός σύνδεσης","err");
@@ -483,11 +485,11 @@ function goFolder(id,name){
   if(cache[id]){ render(); buildTagBar(); window.scrollTo(0,0); }
   else if(snapGet("L"+id)){
     var sn=snapGet("L"+id); cache[id]=sn; render(); buildTagBar(); window.scrollTo(0,0);
-    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&JSON.stringify(res)!==JSON.stringify(sn)){ render(); buildTagBar(); } }).catch(function(){});
+    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&!sameListing(res,sn)){ render(); buildTagBar(); } }).catch(function(){});
   }
   else if(staticListing(id)){
     var sl=staticListing(id); cache[id]=sl; render(); buildTagBar(); window.scrollTo(0,0);
-    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&JSON.stringify(res.folders)+JSON.stringify(res.files.map(function(f){return f.id;}))!==JSON.stringify(sl.folders)+JSON.stringify(sl.files.map(function(f){return f.id;}))){ render(); buildTagBar(); } }).catch(function(){});
+    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&!sameListing(res,sl)){ render(); buildTagBar(); } }).catch(function(){});
   }
   else { showLoading(); listFolder(id).then(function(res){ if(res&&res.error) throw new Error(res.error); render(); buildTagBar(); window.scrollTo(0,0); })
     .catch(function(err){ path.pop(); toast("Σφάλμα φακέλου: "+esc(String(err.message||err)),true); render(); }); }
