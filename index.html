@@ -205,18 +205,39 @@ function apiPost(obj){ return fetch(API,{method:"POST",headers:{"Content-Type":"
 /* ---- remembered snapshots: show the index instantly, refresh quietly in the background ---- */
 function snapGet(k){ try{ var v=localStorage.getItem("gx_s_"+k); return v?JSON.parse(v):null; }catch(e){ return null; } }
 function snapPut(k,v){ try{ localStorage.setItem("gx_s_"+k,JSON.stringify(v)); }catch(e){ try{ Object.keys(localStorage).forEach(function(x){ if(x.indexOf("gx_s_L")===0) localStorage.removeItem(x); }); }catch(e2){} } }
+/* ---- static copy on GitHub Pages (data/), refreshed every 30' by a GitHub Action ---- */
+var STATIC=null, SIDX=null, STHUMB={}, STHUMB_READY=false;
+var STATIC_P=fetch("data/snapshot.json",{cache:"no-cache"}).then(function(r){ return r.ok?r.json():null; }).then(function(s){
+  if(s&&s.items&&s.folders&&s.root){ STATIC=s; SIDX={fo:{},fi:{},nm:{}}; s.folders.forEach(function(f){ (SIDX.fo[f.p]=SIDX.fo[f.p]||[]).push(f); SIDX.nm[f.id]=f.n; }); s.items.forEach(function(x){ (SIDX.fi[x.f]=SIDX.fi[x.f]||[]).push(x); }); }
+  return STATIC; }).catch(function(){ return null; });
+var STHUMB_P=new Promise(function(res){
+  var done=function(){ if(!STHUMB_READY){ STHUMB_READY=true; res(); } };
+  fetch("data/thumbs.json",{cache:"no-cache"}).then(function(r){ return r.ok?r.json():{}; }).then(function(m){ STHUMB=m||{}; done(); }).catch(done);
+  setTimeout(done,1500);
+});
+var IMGX=/^(png|jpe?g|gif|webp|bmp|svg|tif|tiff|heic)$/;
+function staticListing(id){
+  if(!STATIC) return null; var rid=STATIC.root.id; id=id||rid;
+  if(id!==rid && !SIDX.nm[id]) return null;
+  var byName=function(a,b){ return a.name.localeCompare(b.name); };
+  return { id:id, name:(id===rid?STATIC.root.name:SIDX.nm[id]), fromStatic:true,
+    folders:(SIDX.fo[id]||[]).map(function(f){ return {name:f.n,id:f.id}; }).sort(byName),
+    files:(SIDX.fi[id]||[]).map(function(x){ return {name:x.n,id:x.id,ext:x.e,isImg:IMGX.test(x.e||""),size:x.s}; }).sort(byName) };
+}
 function quietOK(){ return !catalogMode && !el("q").value.trim(); }
 function listFolder(id,fresh){ return apiGet("action=list"+(id?("&id="+encodeURIComponent(id)):"")+(fresh?"&fresh=1":"")).then(function(res){ if(res&&res.id){ cache[res.id]=res; snapPut("L"+res.id,res); if(!id) snapPut("Lroot",res); } return res; }); }
 
 function boot(){
   if(!API||API.indexOf("http")!==0){ setStatus("χωρίς backend","err"); showEmpty("Λείπει το /exec του Apps Script."); return; }
-  var snap=snapGet("Lroot"), shown=false;
-  if(snap&&snap.id){
-    cache[snap.id]=snap; LABELS=snapGet("LBL")||{};
-    path=[{id:snap.id,name:snap.name}]; try{history.replaceState({depth:1},"");}catch(e){}
+  var snap=snapGet("Lroot"), shown=false, labelsLive=false;
+  function showFrom(L,labels){
+    cache[L.id]=L; snap=L; if(!labelsLive) LABELS=labels||{};
+    path=[{id:L.id,name:L.name}]; try{history.replaceState({depth:1},"");}catch(e){}
     buildTagBar(); render(); shown=true; setStatus("ανανέωση…");
-  } else setStatus("σύνδεση…");
-  apiGet("action=labels").then(function(r){ var L=(r&&r.labels)||{}; var ch=JSON.stringify(L)!==JSON.stringify(LABELS); LABELS=L; snapPut("LBL",L); if(ch&&path.length){ buildTagBar(); if(quietOK()) render(); } }).catch(function(){});
+  }
+  if(snap&&snap.id) showFrom(snap, snapGet("LBL"));
+  else { setStatus("σύνδεση…"); STATIC_P.then(function(st){ if(st&&!shown){ var L=staticListing(null); if(L) showFrom(L, st.labels); } }); }
+  apiGet("action=labels").then(function(r){ var L=(r&&r.labels)||{}; var ch=JSON.stringify(L)!==JSON.stringify(LABELS); LABELS=L; labelsLive=true; snapPut("LBL",L); if(ch&&path.length){ buildTagBar(); if(quietOK()) render(); } }).catch(function(){});
   listFolder(null).then(function(root){
     if(!root||root.error||!root.id) throw new Error(root&&root.error||"no root");
     setStatus("συνδεδεμένο ✓","ok");
@@ -424,11 +445,15 @@ var TQ=[], TQT=null, TBQ=[], TINF=0;
 function loadThumb(box){
     var id=box.getAttribute("data-thumbfor");
     if(thumbCache[id]!==undefined){ if(thumbCache[id]) box.innerHTML='<img src="'+esc(thumbCache[id])+'" alt="">'; return; }
+    if(STHUMB[id]){ thumbCache[id]="data/"+STHUMB[id]; box.innerHTML='<img src="'+esc(thumbCache[id])+'" alt="" loading="lazy">'; return; }
     thumbCache[id]=null; TQ.push(id); clearTimeout(TQT); TQT=setTimeout(flushThumbs,30);
 }
 function flushThumbs(){
   var ids=TQ.splice(0); if(!ids.length) return;
-  idbGetMany(ids).then(function(m){
+  STHUMB_P.then(function(){
+    ids=ids.filter(function(id){ if(STHUMB[id]){ paintThumb(id,"data/"+STHUMB[id]); return false; } return true; });
+    return idbGetMany(ids);
+  }).then(function(m){
     var miss=[]; ids.forEach(function(id){ if(m[id]!==undefined) paintThumb(id,m[id]); else miss.push(id); });
     for(var i=0;i<miss.length;i+=10) TBQ.push(miss.slice(i,i+10));
     pumpThumbs();
@@ -460,6 +485,10 @@ function goFolder(id,name){
     var sn=snapGet("L"+id); cache[id]=sn; render(); buildTagBar(); window.scrollTo(0,0);
     listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&JSON.stringify(res)!==JSON.stringify(sn)){ render(); buildTagBar(); } }).catch(function(){});
   }
+  else if(staticListing(id)){
+    var sl=staticListing(id); cache[id]=sl; render(); buildTagBar(); window.scrollTo(0,0);
+    listFolder(id).then(function(res){ if(res&&res.id&&cur().id===id&&quietOK()&&JSON.stringify(res.folders)+JSON.stringify(res.files.map(function(f){return f.id;}))!==JSON.stringify(sl.folders)+JSON.stringify(sl.files.map(function(f){return f.id;}))){ render(); buildTagBar(); } }).catch(function(){});
+  }
   else { showLoading(); listFolder(id).then(function(res){ if(res&&res.error) throw new Error(res.error); render(); buildTagBar(); window.scrollTo(0,0); })
     .catch(function(err){ path.pop(); toast("Σφάλμα φακέλου: "+esc(String(err.message||err)),true); render(); }); }
 }
@@ -476,7 +505,8 @@ function reload(){
 var CATALOG=null, CAT_LOADING=null;
 function fetchCatalog(fresh){
   if(CATALOG && !fresh) return Promise.resolve(CATALOG);
-  if(!fresh && !CATALOG){ var cs=snapGet("CAT"); if(cs&&cs.length){ CATALOG=cs; refreshCatalogQuietly(); return Promise.resolve(CATALOG); } }
+  if(!fresh && !CATALOG){ var cs=snapGet("CAT"); if(cs&&cs.length){ CATALOG=cs; refreshCatalogQuietly(); return Promise.resolve(CATALOG); }
+    if(STATIC&&STATIC.items.length){ CATALOG=STATIC.items; refreshCatalogQuietly(); return Promise.resolve(CATALOG); } }
   if(CAT_LOADING && !fresh) return CAT_LOADING;
   CAT_LOADING = apiGet("action=catalog"+(fresh?"&fresh=1":"")).then(function(res){ CAT_LOADING=null; if(!res||res.error) throw new Error((res&&res.error)||"catalog"); CATALOG=res.items||[]; snapPut("CAT",CATALOG); return CATALOG; })
     .catch(function(e){ CAT_LOADING=null; throw e; });
