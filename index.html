@@ -711,7 +711,8 @@ function renderModeration(items){
   el("modcount").textContent = "· "+items.length+" σε αναμονή";
   if(!items.length){ el("modbody").innerHTML = '<div style="text-align:center;color:#5b6b7a;padding:38px 10px">Καμία εκκρεμότητα — όλα εγκεκριμένα. 🎉</div>'; return; }
   var here = esc(cur().name);
-  el("modbody").innerHTML = items.map(function(it){
+  var bulk = items.length > 1 ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn" style="padding:7px 12px;font-size:12.5px" data-approveall="1">✓ Έγκριση όλων ('+items.length+')</button></div>' : '';
+  el("modbody").innerHTML = bulk + items.map(function(it){
     var trans = isTransName(it.n) ? " trans" : "";
     return '<div class="modrow" style="display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:9px;margin-bottom:9px">'
       + '<div class="thumb'+trans+'" data-mthumb="'+esc(it.id)+'" style="width:74px;height:74px;flex:0 0 auto;border-radius:8px;border:1px solid var(--line)"><span class="exttile"><span class="e" style="font-size:15px">'+esc((it.n.split(".").pop()||"?").toUpperCase())+'</span></span></div>'
@@ -729,6 +730,19 @@ function renderModeration(items){
     if(thumbCache[it.id]){ var b0=document.querySelector('[data-mthumb="'+it.id+'"]'); if(b0&&thumbCache[it.id]) b0.innerHTML='<img src="'+esc(thumbCache[it.id])+'" alt="">'; return; }
     apiText("action=thumb&id="+encodeURIComponent(it.id)).then(function(u){ u=(u||"").trim(); thumbCache[it.id]=u; if(u){ var b=document.querySelector('[data-mthumb="'+it.id+'"]'); if(b) b.innerHTML='<img src="'+esc(u)+'" alt="">'; } }).catch(function(){});
   });
+}
+function approveAllRun(){
+  var k = localStorage.getItem("gx_admin") || "", total = 0;
+  el("modbody").innerHTML = '<div style="padding:18px;text-align:center">Έγκριση σε εξέλιξη… <b id="aacount">0</b></div>';
+  (function step(){
+    apiPost({action:"approveall", key:k}).then(function(res){
+      if(res && res.error){ toast("Σφάλμα: "+esc(res.error), true); if(res.error==="bad key"){ localStorage.removeItem("gx_admin"); } loadModeration(); return; }
+      total += (res.approved||0); var c=el("aacount"); if(c) c.textContent = total;
+      if(res.approved > 0 && res.left > res.skipped){ step(); return; }
+      toast("Εγκρίθηκαν "+total+(res.left?(" · σε αναμονή έμειναν "+res.left):""));
+      CATALOG=null; cache={}; loadModeration();
+    }).catch(function(){ toast("Πρόβλημα σύνδεσης — ξαναπάτα «Έγκριση όλων».", true); loadModeration(); });
+  })();
 }
 function modAct(obj,label){
   var k = localStorage.getItem("gx_admin") || "";
@@ -784,6 +798,7 @@ function wire(){
   el("uphint").addEventListener("click",function(e){ if(e.target.id==="whoEdit") uploaderName(true); });
   renderWho();
   el("modal").addEventListener("click",function(e){
+    var aa=e.target.closest("[data-approveall]"); if(aa){ if(confirm("Έγκριση ΟΛΩΝ των αρχείων σε αναμονή; Το καθένα πάει στον φάκελο-προορισμό του. Τα διπλά (ίδιο όνομα και προορισμός) μένουν σε αναμονή.")) approveAllRun(); return; }
     var ap=e.target.closest("[data-approve]"); if(ap){ modAct({action:"approve",id:ap.getAttribute("data-approve")},"Έγκριση"); return; }
     var ah=e.target.closest("[data-approvehere]"); if(ah){ modAct({action:"approve",id:ah.getAttribute("data-approvehere"),toFolderId:cur().id},"Έγκριση εδώ"); return; }
     var rj=e.target.closest("[data-reject]"); if(rj){ if(confirm("Απόρριψη; Το αρχείο θα πάει στον Κάδο του Drive.")) modAct({action:"reject",id:rj.getAttribute("data-reject")},"Απόρριψη"); return; }
