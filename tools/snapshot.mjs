@@ -8,6 +8,10 @@ import path from "node:path";
 const API = "https://script.google.com/macros/s/AKfycbyN8_vX2Xi7tErx1LysAn2axU8NhZAq21UHRzkJBeF5dMgewt-dEq9xw0-BYHiPcM-q/exec";
 const DIR = "data", TDIR = path.join(DIR, "t");
 const MAX_NEW = 600, BATCH = 20, PAR = 3;
+// Α11 (22/11/2026): μικρογραφίες ανεβαίνουν αυτόματα ΜΟΝΟ από τους φακέλους 1. ΚΕΝΤΡΙΚΑ, 2. ΔΕΥΤΕΡΕΥΟΝ,
+// 4. ΕΠΕΤΕΙΑΚΑ, 7. ΤΥΠΩΜΑΤΑ-ΤΑΜΠΕΛΕΣ. Από 5. ΔΡΑΣΕΩΝ, 6. ΕΚΔΗΛΩΣΕΩΝ, 8. ΑΛΛΑ, 9. ΙΣΤΟΡΙΚΟ ΑΡΧΕΙΟ μόνο όσα
+// είναι στο data/egkrimena.json (τα είδε άνθρωπος). Τα υπόλοιπα γράφονται στο data/anamoni.json για τον μηνιαίο έλεγχο.
+const ALLOW_TOP = /^(1|2|4|7)\./;
 
 async function getJSON(qs, tries = 3) {
   for (let i = 0; i < tries; i++) {
@@ -38,7 +42,18 @@ for (const id of Object.keys(man)) {
   if (!live.has(id)) { if (man[id]) { try { fs.unlinkSync(path.join(DIR, man[id])); } catch {} } delete man[id]; }
 }
 const SKIP = /^(zip|rar|txt|json|stl|scad|ttf|otf|docx?|xlsx?)$/;
-const todo = out.items.filter(x => !(x.id in man) && !SKIP.test(x.e || "")).map(x => x.id).slice(0, MAX_NEW);
+let approved = new Set();
+try { approved = new Set(JSON.parse(fs.readFileSync(path.join(DIR, "egkrimena.json"), "utf8")).ids || []); } catch {}
+const topOf = x => String(x.p || "").split(" / ")[0];
+const allowed = x => ALLOW_TOP.test(topOf(x)) || approved.has(x.id);
+// μικρογραφία που δεν επιτρέπεται πια (π.χ. μετακινήθηκε φάκελο) → σβήνεται
+for (const x of out.items) {
+  if (man[x.id] && !allowed(x)) { try { fs.unlinkSync(path.join(DIR, man[x.id])); } catch {} delete man[x.id]; }
+}
+const pending = out.items.filter(x => !allowed(x) && !SKIP.test(x.e || "")).map(x => ({ id: x.id, n: x.n, p: x.p }));
+fs.writeFileSync(path.join(DIR, "anamoni.json"), JSON.stringify({ at: out.at, count: pending.length, items: pending }));
+console.log(`awaiting human review: ${pending.length}`);
+const todo = out.items.filter(x => allowed(x) && !(x.id in man) && !SKIP.test(x.e || "")).map(x => x.id).slice(0, MAX_NEW);
 out.items.forEach(x => { if (SKIP.test(x.e || "") && !(x.id in man)) man[x.id] = ""; });
 console.log(`thumbnails: ${Object.keys(man).length} known, ${todo.length} to fetch`);
 
